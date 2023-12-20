@@ -1,0 +1,13 @@
+diff --git a/SocketRocket/Internal/Utilities/SRMutex.m b/SocketRocket/Internal/Utilities/SRMutex.m
+index 03b5939..398e611 100644
+--- a/SocketRocket/Internal/Utilities/SRMutex.m
++++ b/SocketRocket/Internal/Utilities/SRMutex.m
+@@ -9,7 +9,7 @@
+ 
+ #import "SRMutex.h"
+ 
+-#import <pthread/pthread.h>
++#import <pthread.h>
+ 
+ NS_ASSUME_NONNULL_BEGIN
+ 

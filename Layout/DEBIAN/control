@@ -1,0 +1,9 @@
+Package: com.beeper.beepserv
+Name: beepserv 
+Version: 0.1.0
+Architecture: iphoneos-arm
+Description: Use your iPhone to register your Beeper Mini's phone number with Apple!
+Maintainer: James Gill, June Welker
+Author: James Gill, June Welker
+Section: Tweaks
+Depends:
