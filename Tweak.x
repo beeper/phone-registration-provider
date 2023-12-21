@@ -4,16 +4,7 @@
 #import "SRWebSocket.h"
 #import "Tweak.h"
 
-#define LOG(...) { \
-	NSString *logStr = [NSString stringWithFormat:__VA_ARGS__]; \
-	NSLog(@"BPS: %@", [logStr stringByReplacingOccurrencesOfString:@"\n" withString:@" "]); \
-	NSString *logFile = [NSString stringWithFormat:@"%@/var/mobile/beepserv.log", rootDir]; \
-	[NSFileManager.defaultManager createFileAtPath:logFile contents:nil attributes:nil]; \
-	NSFileHandle *fileHandle = [NSFileHandle fileHandleForWritingAtPath:logFile]; \
-	[fileHandle seekToEndOfFile]; \
-	[fileHandle writeData:[[NSString stringWithFormat:@"%@\n", logStr] dataUsingEncoding:NSUTF8StringEncoding]]; \
-	[fileHandle closeFile]; \
-}
+#define LOG(...) log_impl([NSString stringWithFormat:__VA_ARGS__])
 
 // cheap globals 'cause IPC is stupid and we'll figure it out later
 static NSError *currentError;
@@ -37,6 +28,18 @@ static NSString *kConnected = @"com.beepserv.connected";
 static NSString *kSuiteName = @"com.beeper.beepserv";
 static NSString *stateFile = @"/var/mobile/.beepserv_state";
 
+void log_impl(NSString *logStr) {
+	NSLog(@"BPS: %@", [logStr stringByReplacingOccurrencesOfString:@"\n" withString:@" "]);
+	NSString *logFile = [NSString stringWithFormat:@"%@/var/mobile/beepserv.log", rootDir];
+	NSFileManager *fm = NSFileManager.defaultManager;
+	if (![fm fileExistsAtPath:logFile])
+		[fm createFileAtPath:logFile contents:nil attributes:nil];
+	NSFileHandle *fileHandle = [NSFileHandle fileHandleForWritingAtPath:logFile];
+	[fileHandle seekToEndOfFile];
+	[fileHandle writeData:[[NSString stringWithFormat:@"%@\n", logStr] dataUsingEncoding:NSUTF8StringEncoding]];
+	[fileHandle closeFile];
+}
+
 @interface SocketDelegate : NSObject <SRWebSocketDelegate>
 @property (nonatomic, strong, nullable) SRWebSocket *socket;
 @property (nonatomic, strong, nonnull) dispatch_queue_t validationQueue;
@@ -56,7 +59,7 @@ static NSString *stateFile = @"/var/mobile/.beepserv_state";
 	self = [super init];
 	self.validationQueue = dispatch_queue_create("socketDelegateValidationQueue", DISPATCH_QUEUE_SERIAL);
 	NSString *trimmed = [wsURL stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-	LOG(@"Got trimmed url string: '%@'", trimmed)
+	LOG(@"Got trimmed url string: '%@'", trimmed);
 	self.wsURL = [NSURL URLWithString:trimmed];
 	return self;
 }
@@ -67,7 +70,7 @@ static NSString *stateFile = @"/var/mobile/.beepserv_state";
 
 - (void)tryStartConnection {
 	if (!self.wsURL) {
-		LOG(@"wsURL is nil, not trying to connect")
+		LOG(@"wsURL is nil, not trying to connect");
 		return;
 	}
 
@@ -88,7 +91,7 @@ static NSString *stateFile = @"/var/mobile/.beepserv_state";
 
 		// Check if we have validation data
 		if (validationData != nil && validationDataExpiry > (int)[NSDate.date timeIntervalSince1970]) {
-			LOG(@"Validation data already exists, using that")
+			LOG(@"Validation data already exists, using that");
 			completion(nil, validationData);
 			return;
 		}
@@ -100,14 +103,15 @@ static NSString *stateFile = @"/var/mobile/.beepserv_state";
 		IDSDAccount *account;
 
 		for (IDSDAccount *acc in accounts) {
-			LOG(@"Account: %@, Registration: %@", acc, acc.registration)
+			LOG(@"Account: %@, Registration: %@", acc, acc.registration);
 			if (!acc.registration) {
-				id rebuild = [acc _rebuildRegistrationInfo:NO];
-				LOG(@"Called rebuild on %@, got %@", acc, rebuild);
+				[acc setRegistrationStatus:-1 error:nil alertInfo:nil];
+				[acc _checkRegistration];
+				LOG(@"Called check on %@", acc);
 			}
 
 			if (acc.registration) {
-				LOG(@"Found good registration in %@", acc)
+				LOG(@"Found good registration in account");
 				account = acc;
 				break;
 			}
@@ -116,19 +120,21 @@ static NSString *stateFile = @"/var/mobile/.beepserv_state";
 		IDSRegistration* reg = account.registration;
 
 		if (!reg) {
-			LOG(@"No account had a valid registration, returning")
+			LOG(@"No account had a valid registration, returning");
 			NSError *error = [NSError errorWithDomain:kSuiteName code:2 userInfo:@{@"Error Reason": @"No account had a valid registration"}];
 			completion(error, nil);
 			return;
 		}
 
+		LOG(@"Calling registration with %@", reg);
+
 		id<NSObject> result = [[%c(IDSRegistrationCenter) sharedInstance] _sendAuthenticateRegistration:reg];
-		LOG(@"Got registration result: %@", result)
+		LOG(@"Got registration result: %@", result);
 
 		NSError *error;
 
 		if (dispatch_semaphore_wait(validationDataCompletion, dispatch_time(DISPATCH_TIME_NOW, 60 * NSEC_PER_SEC)) != 0) {
-			LOG(@"validationDataCompletion wait timed out")
+			LOG(@"validationDataCompletion wait timed out");
 			error = [NSError errorWithDomain:kSuiteName code:1 userInfo:@{@"Error Reason": @"semaphore_wait timed out"}];
 		}
 
@@ -138,7 +144,7 @@ static NSString *stateFile = @"/var/mobile/.beepserv_state";
 		currentError = nil;
 		validationDataCompletion = nil;
 
-		LOG(@"Running validation data completion with error %@, data %@", error, data)
+		LOG(@"Running validation data completion with error %@, data %@", error, data);
 		completion(error, data);
 	});
 }
@@ -176,16 +182,17 @@ static NSString *stateFile = @"/var/mobile/.beepserv_state";
 
 - (void)webSocketDidOpen:(SRWebSocket *)webSocket {
 	NSMutableDictionary *data = NSMutableDictionary.new;
-	if (self.code && self.secret)
+	if (self.code && self.secret) {
 		data[@"code"] = self.code;
 		data[@"secret"] = self.secret;
+	}
 
 	NSMutableDictionary *req = @{
 		@"command": @"register",
 		@"data": data
 	}.mutableCopy;
 
-	LOG(@"Socket opened, sending %@", req)
+	LOG(@"Socket opened, sending %@", req);
 
 	[self sendDict:req];
 }
@@ -195,7 +202,7 @@ static NSString *stateFile = @"/var/mobile/.beepserv_state";
 	NSData *jsonData = [NSJSONSerialization dataWithJSONObject:dict options:0 error:&jsonErr];
 
 	if (jsonErr)
-		LOG(@"Couldn't send dict %@, as it couldn't be serialized: %@", dict, jsonErr)
+		LOG(@"Couldn't send dict %@, as it couldn't be serialized: %@", dict, jsonErr);
 
 	// so. for some incomprehensible reason, the precompiler for theos chokes when you include `{.*}`
 	// in a string literal, so we have to cheat and escape them by inserting their unicode codes as
@@ -204,21 +211,25 @@ static NSString *stateFile = @"/var/mobile/.beepserv_state";
 		[NSString stringWithFormat:@"%C \"error\": \"Couldn't serialize to JSON: %@\" %C", 0x007b, jsonErr, 0x007b] :
 		[NSString.alloc initWithData:jsonData encoding:NSUTF8StringEncoding];
 
-	LOG(@"Sending string '%@'", sendStr)
+	LOG(@"Sending string '%@'", sendStr);
 
 	NSError *sendErr;
 	[self.socket sendString:sendStr error:&sendErr];
 
 	if (sendErr)
-		LOG(@"Couldn't send identifiers: %@", sendErr)
+		LOG(@"Couldn't send identifiers: %@", sendErr);
 }
 
 - (void)writeToStateWithCode:(NSString * __nullable)code secret:(NSString * __nullable)secret connected:(BOOL)connected {
-	NSDictionary *state = @{
-		kCode: code,
-		kSecret: secret,
+	NSMutableDictionary *state = @{
 		kConnected: @(connected)
-	};
+	}.mutableCopy;
+
+	if (code)
+		state[kCode] = code;
+	
+	if (secret)
+		state[kSecret] = secret;
 
 	NSError *writeErr;
 	NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"file://%@%@", rootDir, stateFile]];
@@ -232,13 +243,13 @@ static NSString *stateFile = @"/var/mobile/.beepserv_state";
 	self.code = code;
 	self.secret = secret;
 
-	LOG(@"Was given registration code %@", code)
+	LOG(@"Was given registration code %@", code);
 
 	[self writeToStateWithCode:code secret:secret connected:self.socket.readyState == SR_OPEN];
 }
 
 - (void)webSocket:(SRWebSocket *)webSocket didFailWithError:(NSError *)error {
-	LOG(@"Socket failed with error: %@", error)
+	LOG(@"Socket failed with error: %@", error);
 	self.socket = nil;
 
 	[self writeToStateWithCode:nil secret:nil connected:NO];
@@ -249,12 +260,12 @@ static NSString *stateFile = @"/var/mobile/.beepserv_state";
 	@try {
 		[self tryStartConnection];
 	} @catch (NSException *exc) {
-		LOG(@"Socket failed to connect again, bailing: %@", exc)
+		LOG(@"Socket failed to connect again, bailing: %@", exc);
 	}
 }
 
 - (void)webSocket:(SRWebSocket *)webSocket didReceiveMessageWithString:(NSString *)message {
-	LOG(@"Got message string '%@'", message)
+	LOG(@"Got message string '%@'", message);
 
 	NSData *jsonData = [message dataUsingEncoding:NSUTF8StringEncoding];
 
@@ -262,11 +273,11 @@ static NSString *stateFile = @"/var/mobile/.beepserv_state";
 	NSDictionary *object = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:&jsonErr];
 
 	if (jsonErr) {
-		LOG(@"Couldn't parse text message as JSON: %@", jsonErr)
+		LOG(@"Couldn't parse text message as JSON: %@", jsonErr);
 		return;
 	}
 
-	LOG(@"Got json object %@", object)
+	LOG(@"Got json object %@", object);
 
 	id cmd = object[@"command"];
 
@@ -281,22 +292,22 @@ static NSString *stateFile = @"/var/mobile/.beepserv_state";
 		if (data && data[@"code"] && data[@"secret"]) {
 			[self saveRegistrationWithCode:data[@"code"] secret:data[@"secret"]];
 		} else {
-			LOG(@"data object in response had no object `code`: %@", data)
+			LOG(@"data object in response had no object `code`: %@", data);
 		}
 	}
 }
 
 - (void)webSocket:(SRWebSocket *)webSocket didReceiveMessageWithData:(NSData *)data {
-	LOG(@"We received a data message, not handling")
+	LOG(@"We received a data message, not handling");
 }
 
 - (void)webSocket:(SRWebSocket *)webSocket didCloseWithCode:(NSInteger)code reason:(NSString *)reason wasClean:(BOOL)wasClean {
-	LOG(@"The server closed the ws connection with code %ld and reason %@, was clean: %d; will try to reconnect", (long)code, reason, wasClean)
+	LOG(@"The server closed the ws connection with code %ld and reason %@, was clean: %d; will try to reconnect", (long)code, reason, wasClean);
 
 	@try {
 		[self tryStartConnection];
 	} @catch (NSException *exc) {
-		LOG(@"Couldn't restart connection: %@", exc)
+		LOG(@"Couldn't restart connection: %@", exc);
 	}
 }
 
@@ -305,7 +316,7 @@ static NSString *stateFile = @"/var/mobile/.beepserv_state";
 %hook IDSRegistrationMessage
 
 - (void)setValidationData:(id)data {
-	LOG(@"Got validation data: %@", data)
+	LOG(@"Got validation data: %@", data);
 	validationDataExpiry = (int)[NSDate.date timeIntervalSince1970] + 10 * 60;
 	validationData = data;
 
@@ -323,11 +334,12 @@ static NSString *stateFile = @"/var/mobile/.beepserv_state";
 	NSString *orig = %orig(arg1);
 
 	NSError *readErr;
-	NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"file://%@%@", rootDir, stateFile]];
+	NSString *path = [NSString stringWithFormat:@"file://%@%@", rootDir, stateFile];
+	NSURL *url = [NSURL URLWithString:path];
 	NSDictionary *state = [NSDictionary dictionaryWithContentsOfURL:url error:&readErr];
 
-	LOG(@"Got state %@, readErr %@", state, readErr)
-	if (readErr != nil)
+	LOG(@"Got state %@, readErr %@", state, readErr);
+	if (readErr != nil && [NSFileManager.defaultManager fileExistsAtPath:path isDirectory:nil])
 		return [NSString stringWithFormat:@"Couldn't retrieve registration code from disk: %@\n\n%@", readErr, orig];
 
 	NSString *code = state[kCode];
@@ -342,11 +354,29 @@ static NSString *stateFile = @"/var/mobile/.beepserv_state";
 }
 
 - (void)setMadridEnabled:(id)enabled specifier:(id)specifier {
-	LOG(@"Called _setMadridEnabled:%@ specifier:%@, doing nothing", enabled, specifier)
+	LOG(@"Called _setMadridEnabled:%@ specifier:%@, doing nothing", enabled, specifier);
 }
 
 - (BOOL)_isMadridSwitchOn {
 	return NO;
+}
+
+- (id)presentingViewControllerForOnboardingController:(id)controller {
+	LOG(@"Called presentingViewControllerForOnboardingController:%@, doing nothing", controller);
+	return nil;
+}
+
+- (id)onboardingController {
+	LOG(@"Called onboardingController; returning orig");
+	return %orig();
+}
+
+- (void)setOnboardingController:(id)onboardingController {
+	LOG(@"Called setOnboardingController:%@; calling didFinish after setting", onboardingController);
+	%orig(onboardingController);
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[self onboardingControllerDidFinish:onboardingController];
+	});
 }
 
 %end
@@ -379,6 +409,10 @@ NSDictionary *getIdentifiers() {
 }
 
 %ctor {
+	BOOL isDir = FALSE;
+	if ([NSFileManager.defaultManager fileExistsAtPath:@"/var/jb" isDirectory:&isDir] && isDir)
+		rootDir = @"/var/jb";
+
 	NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier];
 
 	// This %ctor will be called every time identityservicesd or the settings app is restarted.
@@ -386,28 +420,26 @@ NSDictionary *getIdentifiers() {
 	if (![bundleID isEqualToString:@"com.apple.identityservicesd"])
 		return;
 
-	BOOL isDir = FALSE;
-	if ([NSFileManager.defaultManager fileExistsAtPath:@"/var/jb" isDirectory:&isDir] && isDir)
-		rootDir = @"/var/jb";
-
 	NSString *filePath = [NSString stringWithFormat:@"%@/.beepserv_wsurl", rootDir];
 	NSString *wsURL = [NSString stringWithContentsOfFile:filePath encoding:NSUTF8StringEncoding error:nil];
 
+	wsURL = wsURL ?: @"https://registration-relay.beeper.com/api/v1/provider";
+
 	static SocketDelegate *socketDelegate;
 	socketDelegate = [SocketDelegate.alloc initWithURL:wsURL];
-	LOG(@"Initialized delegate to %@", socketDelegate)
+	LOG(@"Initialized delegate to %@", socketDelegate);
 
 	// dispatch it after 5 seconds; I don't know the exact point in the program
 	// where this won't fuck stuff up, so we're just cheating by waiting and it works
 	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
 		@try {
 			[socketDelegate tryStartConnection];
-			LOG(@"started connection to %@", socketDelegate.wsURL)
+			LOG(@"started connection to %@", socketDelegate.wsURL);
 		} @catch (NSException *exc) {
-			LOG(@"Couldn't start socketDelegate, not trying again: %@", exc)
+			LOG(@"Couldn't start socketDelegate, not trying again: %@", exc);
 		}
 	});
 
 	identifiers = getIdentifiers();
-	LOG(@"Got identifiers: %@", identifiers)
+	LOG(@"Got identifiers: %@", identifiers);
 }

@@ -1,6 +1,0 @@
-#!/bin/bash
-
-url_file="/.beepserv_wsurl"
-[ -d /var/jb ] && url_file="/var/jb${url_file}"
-
-[ -f "$url_file" ] || { echo "https://registration-relay.beeper.com/api/v1/provider" > "$url_file"; }

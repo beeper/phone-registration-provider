@@ -12,6 +12,8 @@
 
 @interface IDSDAccount
 - (id __nullable)_rebuildRegistrationInfo:(BOOL)rebuild;
+- (void)_checkRegistration;
+- (void)setRegistrationStatus:(int)status error:(NSError * __nullable)error alertInfo:(id __nullable)alertInfo;
 - (IDSRegistration * __nullable)registration;
 @end
 
@@ -20,3 +22,6 @@
 - (NSArray<IDSDAccount *> * __nonnull)accounts;
 @end
 
+@interface CKSettingsMessagesController
+- (void)onboardingControllerDidFinish:(id __nonnull)onboardingController;
+@end
