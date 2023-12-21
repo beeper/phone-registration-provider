@@ -3,6 +3,7 @@
 #import <sys/sysctl.h>
 #import "SRWebSocket.h"
 #import "Tweak.h"
+#import <rootless.h>
 
 #define LOG(...) log_impl([NSString stringWithFormat:__VA_ARGS__])
 
@@ -16,9 +17,6 @@ static NSData *validationData;
 // for retrieving validation data
 static dispatch_semaphore_t validationDataCompletion;
 
-// we set this to `/var/jb` if that dir exists, since we then assume it's a rootless jb.
-static NSString *rootDir = @"";
-
 // The identifiers for this device/os/etc
 static NSDictionary *identifiers;
 
@@ -26,11 +24,11 @@ static NSString *kCode = @"com.beepserv.code";
 static NSString *kSecret = @"com.beepserv.secret";
 static NSString *kConnected = @"com.beepserv.connected";
 static NSString *kSuiteName = @"com.beeper.beepserv";
-static NSString *stateFile = @"/var/mobile/.beepserv_state";
+static NSString *stateFile = ROOT_PATH_NS(@"/var/mobile/.beepserv_state");
 
 void log_impl(NSString *logStr) {
 	NSLog(@"BPS: %@", [logStr stringByReplacingOccurrencesOfString:@"\n" withString:@" "]);
-	NSString *logFile = [NSString stringWithFormat:@"%@/var/mobile/beepserv.log", rootDir];
+	NSString *logFile = ROOT_PATH_NS(@"/var/mobile/beepserv.log");
 	NSFileManager *fm = NSFileManager.defaultManager;
 	if (![fm fileExistsAtPath:logFile])
 		[fm createFileAtPath:logFile contents:nil attributes:nil];
@@ -232,7 +230,7 @@ void log_impl(NSString *logStr) {
 		state[kSecret] = secret;
 
 	NSError *writeErr;
-	NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"file://%@%@", rootDir, stateFile]];
+	NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"file://%@", stateFile]];
 	[state writeToURL:url error:&writeErr];
 
 	if (writeErr)
@@ -334,7 +332,7 @@ void log_impl(NSString *logStr) {
 	NSString *orig = %orig(arg1);
 
 	NSError *readErr;
-	NSString *path = [NSString stringWithFormat:@"file://%@%@", rootDir, stateFile];
+	NSString *path = [NSString stringWithFormat:@"file://%@", stateFile];
 	NSURL *url = [NSURL URLWithString:path];
 	NSDictionary *state = [NSDictionary dictionaryWithContentsOfURL:url error:&readErr];
 
@@ -409,10 +407,6 @@ NSDictionary *getIdentifiers() {
 }
 
 %ctor {
-	BOOL isDir = FALSE;
-	if ([NSFileManager.defaultManager fileExistsAtPath:@"/var/jb" isDirectory:&isDir] && isDir)
-		rootDir = @"/var/jb";
-
 	NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier];
 
 	// This %ctor will be called every time identityservicesd or the settings app is restarted.
@@ -420,7 +414,7 @@ NSDictionary *getIdentifiers() {
 	if (![bundleID isEqualToString:@"com.apple.identityservicesd"])
 		return;
 
-	NSString *filePath = [NSString stringWithFormat:@"%@/.beepserv_wsurl", rootDir];
+	NSString *filePath = ROOT_PATH_NS(@"%@/.beepserv_wsurl");
 	NSString *wsURL = [NSString stringWithContentsOfFile:filePath encoding:NSUTF8StringEncoding error:nil];
 
 	wsURL = wsURL ?: @"https://registration-relay.beeper.com/api/v1/provider";
