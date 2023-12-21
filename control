@@ -6,4 +6,4 @@ Description: Use your iPhone to register your Beeper Mini's phone number with Ap
 Maintainer: James Gill, June Welker
 Author: James Gill, June Welker
 Section: Tweaks
-Depends:
+Depends: mobilesubstrate, firmware (>= 10.0)
