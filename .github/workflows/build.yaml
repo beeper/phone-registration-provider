@@ -17,7 +17,7 @@ jobs:
       - name: Build package
         run: |
           export PACKAGE_BUILDNAME=$(git rev-parse --short HEAD)-rootless
-          make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1
+          make clean package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1
           export PACKAGE_BUILDNAME=$(git rev-parse --short HEAD)-rootful
           make package FINALPACKAGE=1
 
