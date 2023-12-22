@@ -418,7 +418,7 @@ NSDictionary *getIdentifiers() {
 	if (![bundleID isEqualToString:@"com.apple.identityservicesd"])
 		return;
 
-	NSString *filePath = ROOT_PATH_NS(@"%@/.beepserv_wsurl");
+	NSString *filePath = ROOT_PATH_NS(@"/.beepserv_wsurl");
 	NSString *wsURL = [NSString stringWithContentsOfFile:filePath encoding:NSUTF8StringEncoding error:nil];
 
 	wsURL = wsURL ?: @"https://registration-relay.beeper.com/api/v1/provider";
