@@ -1,3 +1,5 @@
+#import "NSDistributedNotificationCenter.h"
+
 @interface IDSValidationSession : NSObject
 - (NSDictionary * __nonnull)headersBySigningData:(NSData * __nonnull)data serverTimestamp:(int)ts error:(NSError * __nullable * __nullable)error;
 @end

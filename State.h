@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import "NSDistributedNotificationCenter.h"
 
 @interface BPState: NSObject
 @property (nonatomic, strong, nullable) NSString *code;
@@ -12,6 +13,7 @@
 				             connected:(BOOL)connected
 				                 error:(NSError * __nullable)error;
 
+- (void)broadcast;
 - (void)writeToDiskWithError:(NSError * __nullable * __nullable)writeErr;
 
 // if this returns nil but the error isn't set, that means the file just doesn't exist
