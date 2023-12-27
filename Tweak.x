@@ -1,16 +1,23 @@
 #import <UIKit/UIKit.h>
 #import <sys/utsname.h>
 #import <sys/sysctl.h>
+#import <rootless.h>
 #import "SRWebSocket.h"
 #import "Tweak.h"
 #import "MobileGestalt.h"
 #import "State.h"
-#import <rootless.h>
+#import "NSDistributedNotificationCenter.h"
+#import "Constants.h"
 
 #define LOG(...) log_impl([NSString stringWithFormat:__VA_ARGS__])
 
 // cheap globals 'cause IPC is stupid and we'll figure it out later
 static NSError *currentError;
+
+// In identityservicesd, this stores the current state to be sent when requested by the Settings app.
+// The Settings app requests the state when it is opened and stores it here
+// to be used in the hook for the messages section footer text
+static BPState *currentState;
 
 // Store the validation data expiry timestamp (10 minutes from now)
 static int validationDataExpiry = 0;
@@ -21,8 +28,6 @@ static dispatch_semaphore_t validationDataCompletion;
 
 // The identifiers for this device/os/etc
 static NSDictionary *identifiers;
-
-static NSString *kSuiteName = @"com.beeper.beepserv";
 
 void log_impl(NSString *logStr) {
 	NSLog(@"BPS: %@", [logStr stringByReplacingOccurrencesOfString:@"\n" withString:@" "]);
@@ -229,12 +234,16 @@ void log_impl(NSString *logStr) {
 		LOG(@"Couldn't send identifiers: %@", sendErr);
 }
 
-- (void)writeToStateWithCode:(NSString * __nullable)code
+- (void)saveStateWithCode:(NSString * __nullable)code
                       secret:(NSString * __nullable)secret
 				   connected:(BOOL)connected
 				       error:(NSError * __nullable)error {
+	currentState = [BPState.alloc initWithCode:code secret:secret connected:connected error:error];
+	
+	[currentState broadcast];
+	
 	NSError *writeErr;
-	[[BPState.alloc initWithCode:code secret:secret connected:connected error:nil] writeToDiskWithError:&writeErr];
+	[currentState writeToDiskWithError: &writeErr];
 
 	if (writeErr)
 		LOG(@"Couldn't write state to file: %@", writeErr);
@@ -246,11 +255,11 @@ void log_impl(NSString *logStr) {
 
 	LOG(@"Was given registration code %@", code);
 
-	[self writeToStateWithCode:code secret:secret connected:self.socket.readyState == SR_OPEN error:nil];
+	[self saveStateWithCode:code secret:secret connected:self.socket.readyState == SR_OPEN error:nil];
 }
 
 - (void)retryWSInLoopWithError:(NSError * __nonnull)error {
-	[self writeToStateWithCode:self.code secret:self.secret connected:NO error:error];
+	[self saveStateWithCode:self.code secret:self.secret connected:NO error:error];
 
 	while (true) {
 		// backoff
@@ -339,20 +348,15 @@ void log_impl(NSString *logStr) {
 - (id)_switchFooterText:(BOOL *)arg1 {
 	NSString *orig = %orig;
 
-	NSError *readErr;
-	BPState *state = [BPState readFromDiskWithError:&readErr];
-
-	LOG(@"Got state %@, readErr %@", state, readErr);
-	if (readErr != nil)
-		return [NSString stringWithFormat:@"Couldn't retrieve registration code from disk: %@\n\n%@", readErr, orig];
-
-	if (state.connected) {
-		return state.code ?
-			[NSString stringWithFormat:@"Your device is currently being used for beepserv. Your code is %@\n\n%@", state.code, orig] :
+	if (currentState.connected) {
+		return currentState.code ?
+			[NSString stringWithFormat:@"Your device is currently being used for beepserv. Your code is %@\n\n%@", currentState.code, orig] :
 			[NSString stringWithFormat:@"Your device is connecting to the beeper relay. Please wait a second...\n\n%@", orig];
-	} else {
-		NSString *errString = state.error.description ?: @"Unknown Error";
+	} else if (currentState) {
+		NSString *errString = currentState.error.description ?: @"Unknown Error";
 		return [NSString stringWithFormat:@"Your device is not connected to the beeper relay due to the following: %@. Please check the beepserv instructions and open an issue if you are unable to get this working.\n\n%@", errString, orig];
+	} else {
+		return [NSString stringWithFormat:@"Your device is not connected to the beeper relay. Please check the beepserv instructions and open an issue if you are unable to get this working.\n\n%@", orig];
 	}
 }
 
@@ -416,8 +420,38 @@ NSDictionary *getIdentifiers() {
 
 	// This %ctor will be called every time identityservicesd or the settings app is restarted.
 	// So we only want it to try to reinitialize stuff if it's in identityservicesd
-	if (![bundleID isEqualToString:@"com.apple.identityservicesd"])
+	if (![bundleID isEqualToString:@"com.apple.identityservicesd"]) {
+		[[NSDistributedNotificationCenter defaultCenter] addObserverForName: kNotificationUpdateState
+			object: nil
+			queue: [NSOperationQueue mainQueue]
+			usingBlock: ^(NSNotification *notification)
+		{
+			NSDictionary *state = notification.userInfo;
+			LOG(@"Received broadcasted state: %@", state);
+			currentState = [BPState.alloc initWithCode:state[kCode] secret:state[kSecret] connected:((NSNumber *)state[kConnected]).boolValue error:state[kError]];
+			NSError *diskWriteError;
+			[currentState writeToDiskWithError:&diskWriteError];
+			if (diskWriteError != nil) {
+				LOG(@"Writing state to disk failed with error: %@", diskWriteError);
+			}
+		}];
+		[[NSDistributedNotificationCenter defaultCenter]
+			postNotificationName: kNotificationRequestStateUpdate
+			object: nil
+			userInfo: nil
+		];
 		return;
+	}
+	
+	[[NSDistributedNotificationCenter defaultCenter] addObserverForName: kNotificationRequestStateUpdate
+		object: nil
+		queue: [NSOperationQueue mainQueue]
+		usingBlock: ^(NSNotification *notification)
+	{
+		if (currentState) {
+			[currentState broadcast];
+		}
+	}];
 
 	NSString *filePath = ROOT_PATH_NS(@"/.beepserv_wsurl");
 	NSString *wsURL = [NSString stringWithContentsOfFile:filePath encoding:NSUTF8StringEncoding error:nil];

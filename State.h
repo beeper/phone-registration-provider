@@ -1,5 +1,3 @@
-#import <Foundation/Foundation.h>
-
 @interface BPState: NSObject
 @property (nonatomic, strong, nullable) NSString *code;
 @property (nonatomic, strong, nullable) NSString *secret;
@@ -12,6 +10,8 @@
 				             connected:(BOOL)connected
 				                 error:(NSError * __nullable)error;
 
+- (NSDictionary * __nonnull)serializeToDictionary;
+- (void)broadcast;
 - (void)writeToDiskWithError:(NSError * __nullable * __nullable)writeErr;
 
 // if this returns nil but the error isn't set, that means the file just doesn't exist
