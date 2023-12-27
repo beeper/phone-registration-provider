@@ -11,6 +11,9 @@
 // cheap globals 'cause IPC is stupid and we'll figure it out later
 static NSError *currentError;
 
+// In identityservicesd, this stores the current state to be sent when requested by the Settings app.
+// The Settings app requests the state when it is opened and stores it here
+// to be used in the hook for the messages section footer text
 static BPState *currentState;
 
 // Store the validation data expiry timestamp (10 minutes from now)
