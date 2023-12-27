@@ -2,10 +2,6 @@
 #import <rootless.h>
 #import "State.h"
 
-static NSString *kCode = @"com.beepserv.code";
-static NSString *kSecret = @"com.beepserv.secret";
-static NSString *kConnected = @"com.beepserv.connected";
-static NSString *kError = @"com.beepserv.error";
 static NSString *stateFile = ROOT_PATH_NS(@"/var/mobile/Library/.beepserv_state");
 static NSString *otherStateFile = ROOT_PATH_NS(@"/var/mobile/.beepserv_state");
 
@@ -47,7 +43,7 @@ static NSString *otherStateFile = ROOT_PATH_NS(@"/var/mobile/.beepserv_state");
 	NSDictionary *state = [self serializeToDictionary];
 		
 	[[NSDistributedNotificationCenter defaultCenter]
-		postNotificationName: @"com.beeper.beepserv/updateState"
+		postNotificationName: kNotificationUpdateState
 		object: nil
 		userInfo: state
 	];

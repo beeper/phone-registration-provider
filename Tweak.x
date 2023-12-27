@@ -26,8 +26,6 @@ static dispatch_semaphore_t validationDataCompletion;
 // The identifiers for this device/os/etc
 static NSDictionary *identifiers;
 
-static NSString *kSuiteName = @"com.beeper.beepserv";
-
 void log_impl(NSString *logStr) {
 	NSLog(@"BPS: %@", [logStr stringByReplacingOccurrencesOfString:@"\n" withString:@" "]);
 	NSString *logFile = ROOT_PATH_NS(@"/var/mobile/beepserv.log");
@@ -420,14 +418,14 @@ NSDictionary *getIdentifiers() {
 	// This %ctor will be called every time identityservicesd or the settings app is restarted.
 	// So we only want it to try to reinitialize stuff if it's in identityservicesd
 	if (![bundleID isEqualToString:@"com.apple.identityservicesd"]) {
-		[[NSDistributedNotificationCenter defaultCenter] addObserverForName: @"com.beeper.beepserv/updateState"
+		[[NSDistributedNotificationCenter defaultCenter] addObserverForName: kNotificationUpdateState
 			object: nil
 			queue: [NSOperationQueue mainQueue]
 			usingBlock: ^(NSNotification *notification)
 		{
 			NSDictionary *state = notification.userInfo;
 			LOG(@"Received broadcasted state: %@", state);
-			currentState = [BPState.alloc initWithCode:[state valueForKey: @"com.beepserv.code"] secret:[state valueForKey: @"com.beepserv.secret"] connected:[state valueForKey: @"com.beepserv.connected"] error:[state valueForKey: @"com.beepserv.error"]];
+			currentState = [BPState.alloc initWithCode:state[kCode] secret:state[kSecret] connected:((NSNumber *)state[kConnected]).boolValue error:state[kError]];
 			NSError *diskWriteError;
 			[currentState writeToDiskWithError:&diskWriteError];
 			if (diskWriteError != nil) {
@@ -435,14 +433,14 @@ NSDictionary *getIdentifiers() {
 			}
 		}];
 		[[NSDistributedNotificationCenter defaultCenter]
-			postNotificationName: @"com.beeper.beepserv/requestStateUpdate"
+			postNotificationName: kNotificationRequestStateUpdate
 			object: nil
 			userInfo: nil
 		];
 		return;
 	}
 	
-	[[NSDistributedNotificationCenter defaultCenter] addObserverForName: @"com.beeper.beepserv/requestStateUpdate"
+	[[NSDistributedNotificationCenter defaultCenter] addObserverForName: kNotificationRequestStateUpdate
 		object: nil
 		queue: [NSOperationQueue mainQueue]
 		usingBlock: ^(NSNotification *notification)
