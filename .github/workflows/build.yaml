@@ -15,7 +15,11 @@ jobs:
         uses: Randomblock1/theos-action@v1
 
       - name: Build package
-        run: make package
+        run: |
+          export PACKAGE_BUILDNAME=$(git rev-parse --short HEAD)-rootless
+          make clean package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1
+          export PACKAGE_BUILDNAME=$(git rev-parse --short HEAD)-rootful
+          make clean package FINALPACKAGE=1
 
       - name: Upload package
         uses: actions/upload-artifact@v3
