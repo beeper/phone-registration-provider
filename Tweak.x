@@ -3,6 +3,7 @@
 #import <sys/sysctl.h>
 #import "SRWebSocket.h"
 #import "Tweak.h"
+#import "MobileGestalt.h"
 #import "State.h"
 #import <rootless.h>
 
@@ -405,8 +406,8 @@ NSDictionary *getIdentifiers() {
 		@"software_name": @"iPhone OS",
 		@"software_version": iOSVersion,
 		@"software_build_id": buildNumber,
-		@"unique_device_id": identifier.description
-		// not providing serial number 'cause there's no easy api to retrieve it
+		@"unique_device_id": identifier.UUIDString, // not actually the devices's UDID, but a UUID
+		@"serial_number": (__bridge NSString *)MGCopyAnswer(CFSTR("SerialNumber"))
 	};
 }
 
