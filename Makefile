@@ -1,7 +1,7 @@
 ARCHS = arm64 arm64e
 
 ifeq ($(THEOS_PACKAGE_SCHEME), rootless)
-	TARGET := iphone:clang:latest:16.0
+	TARGET := iphone:clang:latest:15.0
 else
 	OLDER_XCODE_PATH=/Applications/Xcode-11.7.app
 	PREFIX=$(OLDER_XCODE_PATH)/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/
