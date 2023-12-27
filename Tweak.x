@@ -237,7 +237,7 @@ void log_impl(NSString *logStr) {
                       secret:(NSString * __nullable)secret
 				   connected:(BOOL)connected
 				       error:(NSError * __nullable)error {
-	currentState = [BPState.alloc initWithCode:code secret:secret connected:connected error:nil];
+	currentState = [BPState.alloc initWithCode:code secret:secret connected:connected error:error];
 	
 	[currentState broadcast];
 	
