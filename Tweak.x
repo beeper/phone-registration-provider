@@ -1,10 +1,12 @@
 #import <UIKit/UIKit.h>
 #import <sys/utsname.h>
 #import <sys/sysctl.h>
+#import <rootless.h>
 #import "SRWebSocket.h"
 #import "Tweak.h"
 #import "State.h"
-#import <rootless.h>
+#import "NSDistributedNotificationCenter.h"
+#import "Constants.h"
 
 #define LOG(...) log_impl([NSString stringWithFormat:__VA_ARGS__])
 

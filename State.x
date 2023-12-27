@@ -1,6 +1,8 @@
 #import <Foundation/Foundation.h>
 #import <rootless.h>
 #import "State.h"
+#import "NSDistributedNotificationCenter.h"
+#import "Constants.h"
 
 static NSString *stateFile = ROOT_PATH_NS(@"/var/mobile/Library/.beepserv_state");
 static NSString *otherStateFile = ROOT_PATH_NS(@"/var/mobile/.beepserv_state");

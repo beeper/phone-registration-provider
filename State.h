@@ -1,7 +1,3 @@
-#import <Foundation/Foundation.h>
-#import "NSDistributedNotificationCenter.h"
-#import "Constants.h"
-
 @interface BPState: NSObject
 @property (nonatomic, strong, nullable) NSString *code;
 @property (nonatomic, strong, nullable) NSString *secret;
