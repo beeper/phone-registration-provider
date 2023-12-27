@@ -20,6 +20,7 @@ M_FILES := $(shell find SocketRocket/SocketRocket -type f -name '*.m')
 # Yes I know I should probably use cocoapods or whatever for SocketRocket, but ruby is not nice
 beepserv_FILES = Tweak.x State.x $(M_FILES)
 beepserv_CFLAGS = -fobjc-arc -I./SocketRocket -Wno-deprecated $(LINK_DIRS)
+beepserv_LIBRARIES = MobileGestalt
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
