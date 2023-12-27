@@ -10,9 +10,16 @@
 @interface IDSRegistration : NSObject
 @end
 
+@interface IDSServiceProperties : NSObject
+	@property (nonatomic,retain) NSString * __nullable identifier;
+@end
+
 @interface IDSDAccount
+@property(readonly, nonatomic) IDSServiceProperties * __nullable service;
 - (id __nullable)_rebuildRegistrationInfo:(BOOL)rebuild;
 - (void)_checkRegistration;
+- (void)activateRegistration;
+- (void)reregister;
 - (void)setRegistrationStatus:(int)status error:(NSError * __nullable)error alertInfo:(id __nullable)alertInfo;
 - (IDSRegistration * __nullable)registration;
 @end
