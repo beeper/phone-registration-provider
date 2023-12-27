@@ -4,6 +4,8 @@
 #import "SRWebSocket.h"
 #import "Tweak.h"
 #import "MobileGestalt.h"
+#import "State.h"
+#import <rootless.h>
 
 #define LOG(...) log_impl([NSString stringWithFormat:__VA_ARGS__])
 
@@ -17,21 +19,14 @@ static NSData *validationData;
 // for retrieving validation data
 static dispatch_semaphore_t validationDataCompletion;
 
-// we set this to `/var/jb` if that dir exists, since we then assume it's a rootless jb.
-static NSString *rootDir = @"";
-
 // The identifiers for this device/os/etc
 static NSDictionary *identifiers;
 
-static NSString *kCode = @"com.beepserv.code";
-static NSString *kSecret = @"com.beepserv.secret";
-static NSString *kConnected = @"com.beepserv.connected";
 static NSString *kSuiteName = @"com.beeper.beepserv";
-static NSString *stateFile = @"/var/mobile/.beepserv_state";
 
 void log_impl(NSString *logStr) {
 	NSLog(@"BPS: %@", [logStr stringByReplacingOccurrencesOfString:@"\n" withString:@" "]);
-	NSString *logFile = [NSString stringWithFormat:@"%@/var/mobile/beepserv.log", rootDir];
+	NSString *logFile = ROOT_PATH_NS(@"/var/mobile/beepserv.log");
 	NSFileManager *fm = NSFileManager.defaultManager;
 	if (![fm fileExistsAtPath:logFile])
 		[fm createFileAtPath:logFile contents:nil attributes:nil];
@@ -52,6 +47,7 @@ void log_impl(NSString *logStr) {
 @property (nonatomic, strong, nullable) NSString *secret;
 // This method can throw
 - (void)tryStartConnection;
+- (void)retryWSInLoopWithError:(NSError * __nonnull)error;
 @end
 
 @implementation SocketDelegate
@@ -62,11 +58,23 @@ void log_impl(NSString *logStr) {
 	NSString *trimmed = [wsURL stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 	LOG(@"Got trimmed url string: '%@'", trimmed);
 	self.wsURL = [NSURL URLWithString:trimmed];
+
+	NSError *readErr;
+	BPState *state = [BPState readFromDiskWithError:&readErr];
+	LOG(@"Upon startup, read state as %@", state);
+
+	if (readErr) {
+		LOG(@"Couldn't read BPState from disk upon startup: %@", readErr);
+	} else {
+		self.code = state.code;
+		self.secret = state.secret;
+	}
+
 	return self;
 }
 
 - (NSString *)description {
-	return [NSString stringWithFormat:@"<%@: wsURL = %@, socket = %@, code = %@>", NSStringFromClass(self.class), self.wsURL, self.socket, self.code];
+	return [NSString stringWithFormat:@"<%@: wsURL = %@, socket = %@, code = %@, secret = %@>", NSStringFromClass(self.class), self.wsURL, self.socket, self.code, self.secret];
 }
 
 - (void)tryStartConnection {
@@ -221,20 +229,12 @@ void log_impl(NSString *logStr) {
 		LOG(@"Couldn't send identifiers: %@", sendErr);
 }
 
-- (void)writeToStateWithCode:(NSString * __nullable)code secret:(NSString * __nullable)secret connected:(BOOL)connected {
-	NSMutableDictionary *state = @{
-		kConnected: @(connected)
-	}.mutableCopy;
-
-	if (code)
-		state[kCode] = code;
-	
-	if (secret)
-		state[kSecret] = secret;
-
+- (void)writeToStateWithCode:(NSString * __nullable)code
+                      secret:(NSString * __nullable)secret
+				   connected:(BOOL)connected
+				       error:(NSError * __nullable)error {
 	NSError *writeErr;
-	NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"file://%@%@", rootDir, stateFile]];
-	[state writeToURL:url error:&writeErr];
+	[[BPState.alloc initWithCode:code secret:secret connected:connected error:nil] writeToDiskWithError:&writeErr];
 
 	if (writeErr)
 		LOG(@"Couldn't write state to file: %@", writeErr);
@@ -246,23 +246,29 @@ void log_impl(NSString *logStr) {
 
 	LOG(@"Was given registration code %@", code);
 
-	[self writeToStateWithCode:code secret:secret connected:self.socket.readyState == SR_OPEN];
+	[self writeToStateWithCode:code secret:secret connected:self.socket.readyState == SR_OPEN error:nil];
+}
+
+- (void)retryWSInLoopWithError:(NSError * __nonnull)error {
+	[self writeToStateWithCode:self.code secret:self.secret connected:NO error:error];
+
+	while (true) {
+		// backoff
+		sleep(2);
+
+		@try {
+			[self tryStartConnection];
+			break;
+		} @catch (NSException *exc) {
+			LOG(@"Socket failed to connect again, waiting 2 seconds and trying again: %@", exc);
+		}
+	}
 }
 
 - (void)webSocket:(SRWebSocket *)webSocket didFailWithError:(NSError *)error {
 	LOG(@"Socket failed with error: %@", error);
 	self.socket = nil;
-
-	[self writeToStateWithCode:nil secret:nil connected:NO];
-
-	// backoff
-	sleep(2);
-
-	@try {
-		[self tryStartConnection];
-	} @catch (NSException *exc) {
-		LOG(@"Socket failed to connect again, bailing: %@", exc);
-	}
+	[self retryWSInLoopWithError:error];
 }
 
 - (void)webSocket:(SRWebSocket *)webSocket didReceiveMessageWithString:(NSString *)message {
@@ -305,11 +311,10 @@ void log_impl(NSString *logStr) {
 - (void)webSocket:(SRWebSocket *)webSocket didCloseWithCode:(NSInteger)code reason:(NSString *)reason wasClean:(BOOL)wasClean {
 	LOG(@"The server closed the ws connection with code %ld and reason %@, was clean: %d; will try to reconnect", (long)code, reason, wasClean);
 
-	@try {
-		[self tryStartConnection];
-	} @catch (NSException *exc) {
-		LOG(@"Couldn't restart connection: %@", exc);
-	}
+	NSDictionary *userInfo = @{
+		@"Error Reason": [NSString stringWithFormat:@"webSocket closed with reason: %@", reason]
+	};
+	[self retryWSInLoopWithError:[NSError errorWithDomain:kSuiteName code:code userInfo:userInfo]];
 }
 
 @end
@@ -332,25 +337,22 @@ void log_impl(NSString *logStr) {
 %hook CKSettingsMessagesController
 
 - (id)_switchFooterText:(BOOL *)arg1 {
-	NSString *orig = %orig(arg1);
+	NSString *orig = %orig;
 
 	NSError *readErr;
-	NSString *path = [NSString stringWithFormat:@"file://%@%@", rootDir, stateFile];
-	NSURL *url = [NSURL URLWithString:path];
-	NSDictionary *state = [NSDictionary dictionaryWithContentsOfURL:url error:&readErr];
+	BPState *state = [BPState readFromDiskWithError:&readErr];
 
 	LOG(@"Got state %@, readErr %@", state, readErr);
-	if (readErr != nil && [NSFileManager.defaultManager fileExistsAtPath:path isDirectory:nil])
+	if (readErr != nil)
 		return [NSString stringWithFormat:@"Couldn't retrieve registration code from disk: %@\n\n%@", readErr, orig];
 
-	NSString *code = state[kCode];
-	id connectedObj = state[kConnected];
-	if ([connectedObj isKindOfClass:NSNumber.class] && ((NSNumber *)connectedObj).boolValue) {
-		return code ?
-			[NSString stringWithFormat:@"Your device is currently being used for beepserv. Your code is %@\n\n%@", code, orig] :
+	if (state.connected) {
+		return state.code ?
+			[NSString stringWithFormat:@"Your device is currently being used for beepserv. Your code is %@\n\n%@", state.code, orig] :
 			[NSString stringWithFormat:@"Your device is connecting to the beeper relay. Please wait a second...\n\n%@", orig];
 	} else {
-		return [NSString stringWithFormat:@"Your device is not connected to the beeper relay. Please check the beepserv instructions and open an issue if you are unable to get this working.\n\n%@", orig];
+		NSString *errString = state.error.description ?: @"Unknown Error";
+		return [NSString stringWithFormat:@"Your device is not connected to the beeper relay due to the following: %@. Please check the beepserv instructions and open an issue if you are unable to get this working.\n\n%@", errString, orig];
 	}
 }
 
@@ -410,10 +412,6 @@ NSDictionary *getIdentifiers() {
 }
 
 %ctor {
-	BOOL isDir = FALSE;
-	if ([NSFileManager.defaultManager fileExistsAtPath:@"/var/jb" isDirectory:&isDir] && isDir)
-		rootDir = @"/var/jb";
-
 	NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier];
 
 	// This %ctor will be called every time identityservicesd or the settings app is restarted.
@@ -421,7 +419,7 @@ NSDictionary *getIdentifiers() {
 	if (![bundleID isEqualToString:@"com.apple.identityservicesd"])
 		return;
 
-	NSString *filePath = [NSString stringWithFormat:@"%@/.beepserv_wsurl", rootDir];
+	NSString *filePath = ROOT_PATH_NS(@"/.beepserv_wsurl");
 	NSString *wsURL = [NSString stringWithContentsOfFile:filePath encoding:NSUTF8StringEncoding error:nil];
 
 	wsURL = wsURL ?: @"https://registration-relay.beeper.com/api/v1/provider";
@@ -437,7 +435,14 @@ NSDictionary *getIdentifiers() {
 			[socketDelegate tryStartConnection];
 			LOG(@"started connection to %@", socketDelegate.wsURL);
 		} @catch (NSException *exc) {
-			LOG(@"Couldn't start socketDelegate, not trying again: %@", exc);
+			LOG(@"Couldn't start socketDelegate, starting retry loop: %@", exc);
+
+			NSError *err = [NSError errorWithDomain:exc.name code:0 userInfo:@{
+    			NSUnderlyingErrorKey: exc,
+    			NSDebugDescriptionErrorKey: exc.userInfo ?: @{ },
+    			NSLocalizedFailureReasonErrorKey: (exc.reason ?: @"???")
+			}];
+			[socketDelegate retryWSInLoopWithError:err];
 		}
 	});
 

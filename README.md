@@ -28,3 +28,7 @@ If this code does not appear, SSH into the iPhone and run `cat /var/jb/var/mobil
 4. Set the environment variable `$THEOS_DEVICE_IP` to the IP Address of the device you want to install it to (e.g. with `export THEOS_DEVICE_IP=<IP of phone>`)
 5. Optional: install oslog (not the default one, but specifically [the one from noisyflake](https://github.com/NoisyFlake/oslog), as it works on the latest versions of iOS) to watch logs from ssh
 6. Install with `make package install`
+
+## Collaboration
+We are very interested in working with jailbreak developers to help improve this! Please join us in #beepserv:beeper.com Matrix channel. 
+In particular, we would love some help converting this from being a tweak (with very complex UI that only shows up in Settings -> Messages) to being a normal app that shows up on home screen with UI to show logs etc.
