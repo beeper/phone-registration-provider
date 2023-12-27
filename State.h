@@ -13,6 +13,7 @@
 				             connected:(BOOL)connected
 				                 error:(NSError * __nullable)error;
 
+- (NSDictionary * __nonnull)serializeToDictionary;
 - (void)broadcast;
 - (void)writeToDiskWithError:(NSError * __nullable * __nullable)writeErr;
 

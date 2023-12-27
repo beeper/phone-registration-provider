@@ -26,7 +26,7 @@ static NSString *otherStateFile = ROOT_PATH_NS(@"/var/mobile/.beepserv_state");
 	return [NSString stringWithFormat:@"<BPState code:%@ secret:%@ connected:%d error:%@", self.code, self.secret, self.connected, self.error];
 }
 
-- (void)broadcast {
+- (NSDictionary * __nonnull)serializeToDictionary {
 	NSMutableDictionary *state = @{
 		kConnected: @(self.connected)
 	}.mutableCopy;
@@ -40,6 +40,12 @@ static NSString *otherStateFile = ROOT_PATH_NS(@"/var/mobile/.beepserv_state");
 	if (self.error)
 		state[kError] = self.error;
 		
+	return state;
+}
+
+- (void)broadcast {
+	NSDictionary *state = [self serializeToDictionary];
+		
 	[[NSDistributedNotificationCenter defaultCenter]
 		postNotificationName: @"com.beeper.beepserv/updateState"
 		object: nil
@@ -48,18 +54,7 @@ static NSString *otherStateFile = ROOT_PATH_NS(@"/var/mobile/.beepserv_state");
 }
 
 - (void)writeToDiskWithError:(NSError * __nullable * __nullable)writeErr {
-	NSMutableDictionary *state = @{
-		kConnected: @(self.connected)
-	}.mutableCopy;
-
-	if (self.code)
-		state[kCode] = self.code;
-
-	if (self.secret)
-		state[kSecret] = self.secret;
-
-	if (self.error)
-		state[kError] = self.error;
+	NSDictionary *state = [self serializeToDictionary];
 
 	NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"file://%@", stateFile]];
 	[state writeToURL:url error:writeErr];
