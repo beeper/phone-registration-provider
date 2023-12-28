@@ -61,8 +61,12 @@ static NSString *otherStateFile = ROOT_PATH_NS(@"/var/mobile/.beepserv_state");
 }
 
 + (instancetype __nullable)readFromDiskWithError:(NSError * __nullable * __nullable)readErr {
-	if (![NSFileManager.defaultManager fileExistsAtPath:stateFile isDirectory:nil])
+	if (
+		![NSFileManager.defaultManager fileExistsAtPath:stateFile isDirectory:nil] &&
+		![NSFileManager.defaultManager fileExistsAtPath:otherStateFile isDirectory:nil]
+	) {
 		return nil;
+	}
 
 	NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"file://%@", stateFile]];
 	NSDictionary *state = [NSDictionary dictionaryWithContentsOfURL:url error:readErr];
