@@ -17,7 +17,7 @@ To install:
 ## Usage
 This tweak should automatically run in the background, connected to Beeper's relay service, available to facilitate registering your Android's phone number with Apple as an iPhone.
 
-To start this registration process, open the Settings App, navigate to Messages, and read off the registration code stated underneath the 'iMessage' switch. Enter this codoe into Beeper Mini, and it should automatically start the registration process.
+To start this registration process, open the Settings App, navigate to Messages, and read off the registration code stated underneath the 'iMessage' switch. Enter this code into Beeper Mini, and it should automatically start the registration process.
 
 If this code does not appear, SSH into the iPhone and run `cat /var/jb/var/mobile/.beepserv_state` to view the code.
 
