@@ -218,11 +218,8 @@ void log_impl(NSString *logStr) {
 	if (jsonErr)
 		LOG(@"Couldn't send dict %@, as it couldn't be serialized: %@", dict, jsonErr);
 
-	// so. for some incomprehensible reason, the precompiler for theos chokes when you include `{.*}`
-	// in a string literal, so we have to cheat and escape them by inserting their unicode codes as
-	// characters in format arguments
 	NSString *sendStr = (jsonErr != nil) ?
-		[NSString stringWithFormat:@"%C \"error\": \"Couldn't serialize to JSON: %@\" %C", 0x007b, jsonErr, 0x007b] :
+		[NSString stringWithFormat:@"{ \"error\": \"Couldn't serialize to JSON: %@\" }", jsonErr] :
 		[NSString.alloc initWithData:jsonData encoding:NSUTF8StringEncoding];
 
 	LOG(@"Sending string '%@'", sendStr);
