@@ -30,6 +30,8 @@ If this code does not appear, SSH into the iPhone and run `cat /var/jb/var/mobil
 6. Optional: install oslog (not the default one, but specifically [the one from noisyflake](https://github.com/NoisyFlake/oslog), as it works on the latest versions of iOS) to watch logs from ssh
 7. Install with `make package install`
 
+The Makefiles currently assume you have Xcode 11.7 installed at `/Applications/Xcode_11.7.app` when not packaging for rootless to ensure compatibility with A12+ devices on iOS 12.0-13.7 ([more here](https://theos.dev/docs/arm64e-deployment)). You can either download this version from Apple or edit the Makefiles if you want to build with a different version.
+
 ## Collaboration
 We are very interested in working with jailbreak developers to help improve this! Please join us in #beepserv:beeper.com Matrix channel. 
 In particular, we would love some help converting this from being a tweak (with very complex UI that only shows up in Settings -> Messages) to being a normal app that shows up on home screen with UI to show logs etc.
