@@ -73,7 +73,7 @@ static NSString *otherStateFile = ROOT_PATH_NS(@"/var/mobile/.beepserv_state");
 
 	if (readErr && *readErr) {
 		NSError *otherReadErr;
-		url = [NSURL URLWithString:[NSString stringWithFormat:@"file://%@", otherReadErr]];
+		url = [NSURL URLWithString:[NSString stringWithFormat:@"file://%@", otherStateFile]];
 		state = [NSDictionary dictionaryWithContentsOfURL:url error:&otherReadErr];
 		if (otherReadErr) {
 			*readErr = otherReadErr;
