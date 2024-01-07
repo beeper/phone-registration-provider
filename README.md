@@ -26,8 +26,11 @@ If this code does not appear, SSH into the iPhone and run `cat /var/jb/var/mobil
 2. Make sure you have ssh access to root on your device (the default password is `alpine`, you may need to log in to `mobile` over ssh first to change the password)
 3. Install [theos](https://theos.dev) or make sure it's up-to-date by running `$THEOS/bin/update-theos` or `make update-theos`
 4. Set the environment variable `$THEOS_DEVICE_IP` to the IP Address of the device you want to install it to (e.g. with `export THEOS_DEVICE_IP=<IP of phone>`)
-5. Optional: install oslog (not the default one, but specifically [the one from noisyflake](https://github.com/NoisyFlake/oslog), as it works on the latest versions of iOS) to watch logs from ssh
-6. Install with `make package install`
+5. Set the environment variable `$THEOS_PACKAGE_SCHEME` to `rootless` if you're using a rootless jailbreak (e.g. with `export THEOS_PACKAGE_SCHEME=rootless`)
+6. Optional: install oslog (not the default one, but specifically [the one from noisyflake](https://github.com/NoisyFlake/oslog), as it works on the latest versions of iOS) to watch logs from ssh
+7. Install with `make package install`
+
+The Makefiles currently assume you have Xcode 11.7 installed at `/Applications/Xcode_11.7.app` when not packaging for rootless to ensure compatibility with A12+ devices on iOS 12.0-13.7 ([more here](https://theos.dev/docs/arm64e-deployment)). You can either download this version from Apple or edit the Makefiles if you want to build with a different version.
 
 ## Collaboration
 We are very interested in working with jailbreak developers to help improve this! Please join us in #beepserv:beeper.com Matrix channel. 
