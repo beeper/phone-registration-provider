@@ -2,6 +2,11 @@
 
 A tweak for jailbroken iPhones that can be connected with Beeper Mini to provide phone number registration functionality
 
+> [!NOTE]
+> beepserv is not entitled to the usual level of customer support
+> on Beeper. If you need help with beepserv, please
+> join [#beepserv:beeper.com] instead of asking in your support room.
+
 ## Setup
 
 You'll need:
